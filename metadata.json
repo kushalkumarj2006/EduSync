@@ -1,0 +1,6 @@
+{
+  "name": "EduSync",
+  "description": "Offline-first education platform for rural students in India. Includes offline video caching, interactive quizzes, data saver modes, and background synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
