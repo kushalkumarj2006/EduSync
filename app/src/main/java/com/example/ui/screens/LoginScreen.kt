@@ -30,11 +30,11 @@ fun LoginScreen(
     onLoginClick: (String, () -> Unit, (String) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var email by remember { mutableStateFlowOf("") }
-    var password by remember { mutableStateFlowOf("") }
-    var errorMessage by remember { mutableStateFlowOf<String?>(null) }
-    var isSigningUp by remember { mutableStateFlowOf(false) }
-    var loading by remember { mutableStateFlowOf(false) }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isSigningUp by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -252,6 +252,3 @@ fun LoginScreen(
         }
     }
 }
-
-// Helper to bridge state in compose easily
-private fun <T> mutableStateFlowOf(initialValue: T): MutableState<T> = mutableStateOf(initialValue)

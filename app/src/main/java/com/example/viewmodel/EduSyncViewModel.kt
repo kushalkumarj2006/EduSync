@@ -165,11 +165,8 @@ class EduSyncViewModel(application: Application) : AndroidViewModel(application)
             _selectedAnswerIndex.value = null
             if (course != null) {
                 // Restore watch position from Room
-                repository.getWatchTimeForCourse(course.id).first()?.let {
-                    _currentWatchPosition.value = it.lastWatchedPositionSeconds
-                } ?: run {
-                    _currentWatchPosition.value = 0
-                }
+                val watchTime = repository.getWatchTimeForCourse(course.id).firstOrNull()
+                _currentWatchPosition.value = watchTime?.lastWatchedPositionSeconds ?: 0
             }
         }
     }
