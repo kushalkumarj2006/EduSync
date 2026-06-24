@@ -57,6 +57,9 @@ interface QuizAnswerDao {
     @Query("SELECT * FROM quiz_answers WHERE courseId = :courseId")
     fun getAnswersForCourse(courseId: String): Flow<List<QuizAnswer>>
 
+    @Query("SELECT * FROM quiz_answers")
+    fun getAllAnswers(): Flow<List<QuizAnswer>>
+
     @Query("SELECT * FROM quiz_answers WHERE courseId = :courseId")
     suspend fun getAnswersForCourseSync(courseId: String): List<QuizAnswer>
 

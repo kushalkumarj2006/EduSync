@@ -52,3 +52,14 @@ data class DataUsage(
     @PrimaryKey val dateString: String, // e.g. "2026-06-24"
     val bytesUsed: Long
 )
+
+data class StudyBadge(
+    val id: String,
+    val name: String,
+    val description: String,
+    val iconName: String, // "star", "check_circle", "flash_on", "signal_cellular", "cloud", "favorite"
+    val isUnlocked: Boolean,
+    val progressDescription: String = "",
+    val category: String // "Milestone" or "Streak"
+)
+

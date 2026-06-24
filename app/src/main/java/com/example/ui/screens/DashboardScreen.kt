@@ -31,6 +31,7 @@ import com.example.ui.components.*
 import com.example.ui.theme.AccentOrange
 import com.example.ui.theme.PrimaryBlue
 import com.example.ui.theme.SuccessGreen
+import com.example.data.model.StudyBadge
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +48,11 @@ fun DashboardScreen(
     isSyncing: Boolean,
     syncMessage: String,
     syncFraction: Float,
+    streakCount: Int,
+    studiedDates: List<String>,
+    badges: List<StudyBadge>,
+    onSimulateStreak: (Int) -> Unit,
+    onClearSimulation: () -> Unit,
     onSearchChange: (String) -> Unit,
     onCategorySelect: (String?) -> Unit,
     onCourseSelect: (Course) -> Unit,
@@ -139,6 +145,22 @@ fun DashboardScreen(
                     syncFraction = syncFraction,
                     isOnline = isOnline,
                     onSyncTrigger = onSyncTrigger
+                )
+            }
+
+            // Gamified Streak and Achievements Section
+            item {
+                StreakTrackerCard(
+                    streakCount = streakCount,
+                    studiedDates = studiedDates,
+                    onSimulateStreak = onSimulateStreak,
+                    onClearSimulation = onClearSimulation
+                )
+            }
+
+            item {
+                BadgesSection(
+                    badges = badges
                 )
             }
 

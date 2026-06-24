@@ -91,6 +91,10 @@ class EduSyncRepository(private val context: Context) {
         return quizAnswerDao.getAnswersForCourse(courseId)
     }
 
+    fun getAllAnswers(): Flow<List<QuizAnswer>> {
+        return quizAnswerDao.getAllAnswers()
+    }
+
     // Save playback position
     suspend fun saveVideoProgress(courseId: String, currentPositionSeconds: Int, totalDurationSeconds: Int) {
         withContext(Dispatchers.IO) {

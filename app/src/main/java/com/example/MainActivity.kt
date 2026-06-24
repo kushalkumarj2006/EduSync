@@ -46,6 +46,10 @@ class MainActivity : ComponentActivity() {
                 val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
                 val syncMessage by viewModel.syncMessage.collectAsStateWithLifecycle()
                 val syncFraction by viewModel.syncFraction.collectAsStateWithLifecycle()
+
+                val streakCount by viewModel.studyStreakCount.collectAsStateWithLifecycle()
+                val studiedDates by viewModel.studiedDates.collectAsStateWithLifecycle()
+                val badges by viewModel.studyBadges.collectAsStateWithLifecycle()
                 
                 val watchPosition by viewModel.currentWatchPosition.collectAsStateWithLifecycle()
                 val isVideoPlaying by viewModel.isVideoPlaying.collectAsStateWithLifecycle()
@@ -95,6 +99,11 @@ class MainActivity : ComponentActivity() {
                                             isSyncing = isSyncing,
                                             syncMessage = syncMessage,
                                             syncFraction = syncFraction,
+                                            streakCount = streakCount,
+                                            studiedDates = studiedDates,
+                                            badges = badges,
+                                            onSimulateStreak = { viewModel.simulateStreak(it) },
+                                            onClearSimulation = { viewModel.clearStreakSimulation() },
                                             onSearchChange = { viewModel.setSearchQuery(it) },
                                             onCategorySelect = { viewModel.setCategoryFilter(it) },
                                             onCourseSelect = { viewModel.selectCourse(it) },

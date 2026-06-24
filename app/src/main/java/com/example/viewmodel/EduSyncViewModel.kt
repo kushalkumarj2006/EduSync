@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.Course
 import com.example.data.model.QuizAnswer
 import com.example.data.model.QuizQuestion
+import com.example.data.model.StudyBadge
 import com.example.data.repository.EduSyncRepository
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -16,17 +17,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class EduSyncViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = EduSyncRepository(application)
     private val moshi = Moshi.Builder().build()
-
-    // Auth States
-    val currentUser: StateFlow<String?> = repository.currentUser
-
-    // All Progress State
-    val allProgress: StateFlow<List<com.example.data.model.UserProgress>> = repository.allProgress
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Network Status (Simulated + Actual fallback)
     private val _isOnlineSimulated = MutableStateFlow(true)
@@ -35,6 +32,108 @@ class EduSyncViewModel(application: Application) : AndroidViewModel(application)
     // Data Saver and Usage Tracking
     private val _dataSaverMode = MutableStateFlow(true)
     val dataSaverMode: StateFlow<Boolean> = _dataSaverMode.asStateFlow()
+
+    // Auth States
+    val currentUser: StateFlow<String?> = repository.currentUser
+
+    // All Progress State
+    val allProgress: StateFlow<List<com.example.data.model.UserProgress>> = repository.allProgress
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // All Answers Flow
+    val allAnswers: StateFlow<List<QuizAnswer>> = repository.getAllAnswers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Study Streak & Badges
+    private val _studiedDates = MutableStateFlow<List<String>>(emptyList())
+    val studiedDates: StateFlow<List<String>> = _studiedDates.asStateFlow()
+
+    val studyStreakCount: StateFlow<Int> = _studiedDates
+        .map { dates ->
+            calculateStreak(dates.toSet())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val studyBadges: StateFlow<List<StudyBadge>> = combine(
+        allProgress,
+        allAnswers,
+        dataSaverMode,
+        isOnlineSimulated,
+        studyStreakCount
+    ) { progressList, answersList, dataSaver, onlineSim, streak ->
+        // 1. Bronze Starter: Progress on at least one course > 0%
+        val hasStarted = progressList.any { it.progressPercentage > 0 }
+        val badge1 = StudyBadge(
+            id = "bronze_starter",
+            name = "Bronze Starter",
+            description = "Begin watching your first course video.",
+            iconName = "star",
+            isUnlocked = hasStarted,
+            progressDescription = if (hasStarted) "Unlocked!" else "Watch any course video to unlock",
+            category = "Milestone"
+        )
+
+        // 2. Gold Finisher: Completion of at least one course = 100%
+        val hasCompleted = progressList.any { it.progressPercentage >= 100 }
+        val badge2 = StudyBadge(
+            id = "gold_finisher",
+            name = "Gold Finisher",
+            description = "Watch 100% of any course video.",
+            iconName = "check_circle",
+            isUnlocked = hasCompleted,
+            progressDescription = if (hasCompleted) "Unlocked!" else "Complete a course video to unlock",
+            category = "Milestone"
+        )
+
+        // 3. Quiz Scholar: Completed at least one quiz answer
+        val hasDoneQuiz = answersList.isNotEmpty()
+        val badge3 = StudyBadge(
+            id = "quiz_scholar",
+            name = "Quiz Scholar",
+            description = "Submit an answer for any course quiz.",
+            iconName = "flash_on",
+            isUnlocked = hasDoneQuiz,
+            progressDescription = if (hasDoneQuiz) "Unlocked!" else "Answer a quiz question to unlock",
+            category = "Milestone"
+        )
+
+        // 4. Offline Champion: Saved progress or answered a quiz while unsynced (offline)
+        val hasOfflineStudy = progressList.any { !it.isSynced } || answersList.any { !it.isSynced }
+        val badge4 = StudyBadge(
+            id = "offline_champion",
+            name = "Offline Champion",
+            description = "Save your study progress or quiz answers offline.",
+            iconName = "cloud",
+            isUnlocked = hasOfflineStudy,
+            progressDescription = if (hasOfflineStudy) "Unlocked!" else "Study in offline mode to unlock",
+            category = "Milestone"
+        )
+
+        // 5. Data Conservator: Study with Data Saver Mode enabled
+        val badge5 = StudyBadge(
+            id = "data_conservator",
+            name = "Data Conservator",
+            description = "Protect your bandwidth by enabling Data Saver mode.",
+            iconName = "signal_cellular",
+            isUnlocked = dataSaver,
+            progressDescription = if (dataSaver) "Unlocked!" else "Turn on Data Saver mode to unlock",
+            category = "Milestone"
+        )
+
+        // 6. Streak Master: Streak of 3 or more days
+        val hasStreakOf3 = streak >= 3
+        val badge6 = StudyBadge(
+            id = "streak_master",
+            name = "Streak Master",
+            description = "Maintain a consecutive daily study streak of 3 days or more.",
+            iconName = "favorite",
+            isUnlocked = hasStreakOf3,
+            progressDescription = "Current streak: $streak / 3 days",
+            category = "Streak"
+        )
+
+        listOf(badge1, badge2, badge3, badge4, badge5, badge6)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val todayDataUsage: StateFlow<Long> = repository.getTodayDataUsage()
         .map { it?.bytesUsed ?: 0L }
@@ -107,6 +206,7 @@ class EduSyncViewModel(application: Application) : AndroidViewModel(application)
     init {
         viewModelScope.launch {
             repository.checkAndPrepopulate()
+            loadStudiedDates()
             // Detect real internet network state to sync simulated online state
             val cm = application.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             val capabilities = cm.getNetworkCapabilities(cm.activeNetwork)
@@ -182,6 +282,7 @@ class EduSyncViewModel(application: Application) : AndroidViewModel(application)
     // Playback control
     fun playVideo() {
         val course = _selectedCourse.value ?: return
+        recordStudyActivityToday()
         if (selectedQuality.value == "Text-Only") {
             // Text-Only uses zero video bandwidth, loads transcript instantly!
             _isVideoPlaying.value = true
@@ -284,6 +385,7 @@ class EduSyncViewModel(application: Application) : AndroidViewModel(application)
         val question = questions[currentIdx]
         val isCorrect = selectedIdx == question.correctAnswerIndex
 
+        recordStudyActivityToday()
         viewModelScope.launch {
             repository.saveQuizAnswer(
                 courseId = course.id,
@@ -320,5 +422,115 @@ class EduSyncViewModel(application: Application) : AndroidViewModel(application)
             _syncMessage.value = "Synced successfully"
             _syncFraction.value = 0f
         }
+    }
+
+    private fun loadStudiedDates() {
+        val sharedPrefs = getApplication<Application>().getSharedPreferences("edusync_prefs", Context.MODE_PRIVATE)
+        val dateSet = sharedPrefs.getStringSet("studied_dates", emptySet()) ?: emptySet()
+        _studiedDates.value = dateSet.toList().sorted()
+    }
+
+    fun recordStudyActivityToday() {
+        viewModelScope.launch {
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("edusync_prefs", Context.MODE_PRIVATE)
+            val currentDates = sharedPrefs.getStringSet("studied_dates", emptySet())?.toMutableSet() ?: mutableSetOf()
+            val todayStr = repository.getTodayDateString()
+            if (!currentDates.contains(todayStr)) {
+                currentDates.add(todayStr)
+                sharedPrefs.edit().putStringSet("studied_dates", currentDates).apply()
+                _studiedDates.value = currentDates.toList().sorted()
+            }
+        }
+    }
+
+    fun simulateStreak(days: Int) {
+        viewModelScope.launch {
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("edusync_prefs", Context.MODE_PRIVATE)
+            val currentDates = mutableSetOf<String>()
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            
+            for (i in 0 until days) {
+                val cal = Calendar.getInstance()
+                cal.add(Calendar.DAY_OF_YEAR, -i)
+                currentDates.add(sdf.format(cal.time))
+            }
+            
+            sharedPrefs.edit().putStringSet("studied_dates", currentDates).apply()
+            _studiedDates.value = currentDates.toList().sorted()
+        }
+    }
+
+    fun clearStreakSimulation() {
+        viewModelScope.launch {
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("edusync_prefs", Context.MODE_PRIVATE)
+            sharedPrefs.edit().remove("studied_dates").apply()
+            _studiedDates.value = emptyList()
+        }
+    }
+
+    private fun calculateStreak(dates: Set<String>): Int {
+        if (dates.isEmpty()) return 0
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val parsedDates = dates.mapNotNull {
+            try { sdf.parse(it) } catch(e: Exception) { null }
+        }.sortedDescending() // newest first
+
+        if (parsedDates.isEmpty()) return 0
+
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.time
+
+        val yesterday = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, -1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.time
+
+        val firstDate = parsedDates.first()
+        val firstDateTruncated = Calendar.getInstance().apply {
+            time = firstDate
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.time
+
+        if (firstDateTruncated != today && firstDateTruncated != yesterday) {
+            return 0
+        }
+
+        var streak = 1
+        var currentCal = Calendar.getInstance().apply { time = firstDateTruncated }
+
+        for (i in 1 until parsedDates.size) {
+            val nextDate = parsedDates[i]
+            val nextDateTruncated = Calendar.getInstance().apply {
+                time = nextDate
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.time
+
+            val expectedPrevDay = (currentCal.clone() as Calendar).apply {
+                add(Calendar.DAY_OF_YEAR, -1)
+            }.time
+
+            if (nextDateTruncated == expectedPrevDay) {
+                streak++
+                currentCal.time = nextDateTruncated
+            } else if (nextDateTruncated == currentCal.time) {
+                // Same day, skip
+            } else {
+                break
+            }
+        }
+        return streak
     }
 }
